@@ -7,10 +7,15 @@ import {
 import { UserService } from './user.service';
 import { UserDTO } from 'src/dto/user.dto';
 import * as bcrypt from 'bcrypt';
+import { User } from './entity/user.entity';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class AuthService {
-  constructor(private userService: UserService) {}
+  constructor(
+    private userService: UserService,
+    private jwtService: JwtService,
+  ) {}
 
   async registerUser(newUser: UserDTO): Promise<UserDTO> {
     const userFind: UserDTO = await this.userService.findByField({
@@ -24,14 +29,22 @@ export class AuthService {
     return this.userService.save(newUser);
   }
 
-  async validateUser(user: UserDTO): Promise<string | undefined> {
-    const userFind: UserDTO = await this.userService.findByField({
-      where: { username: user.username },
-    });
-    const validatePassword = await bcrypt.compare(user.password, userFind.password);
+  async validateUser(
+    userDTO: UserDTO,
+  ): Promise<{ accessToken: string } | undefined> {
+    const userFind: User = (await this.userService.findByField({
+      where: { username: userDTO.username },
+    })) as User; // 명시적으로 User 타입으로 선언
+    const validatePassword = await bcrypt.compare(
+      userDTO.password,
+      userFind.password,
+    );
     if (!userFind || !validatePassword) {
       throw new UnauthorizedException();
     }
-    return 'login successful!';
+    const payload = { id: userFind.id, username: userFind.username };
+    return {
+      accessToken: this.jwtService.sign(payload),
+    };
   }
 }
